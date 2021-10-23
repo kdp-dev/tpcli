@@ -196,6 +196,7 @@ async fn set_message(
     client: &Client<HttpsConnector<HttpConnector>>,
     token: &str,
     message: Option<&str>,
+    pin: bool,
 ) -> Result<(), hyper::http::Error> {
     let request = Request::builder()
         .method(Method::PUT)
@@ -204,7 +205,14 @@ async fn set_message(
         .header("Content-Type", "application/json")
         .body(Body::from(format!(
             "{{\"message\":\"{}\",\"expiry\":\"9999-12-31T05:00:00.000Z\"}}",
-            message.unwrap_or("")
+            match message {
+                Some(message) => format!(
+                    "{}{}",
+                    message,
+                    if pin { "<pinnednote></pinnednote>" } else { "" }
+                ),
+                None => "".to_string(),
+            }
         )))?;
 
     let resp = client.request(request).await.unwrap();
@@ -238,6 +246,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 .takes_value(true)
                 .help("Teams status message to display"),
         )
+        .arg(
+            Arg::with_name("pin")
+                .short("p")
+                .long("pin")
+                .required(false)
+                .takes_value(false)
+                .requires("message")
+                .help("Show message when people send me a message"),
+        )
         .get_matches();
 
     let presence_to_set = Presence::from_str(matches.value_of("status").unwrap()).unwrap();
@@ -251,7 +268,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let _ = futures::try_join!(
         set_availability(&client, &token_info.token, &presence_to_set),
-        set_message(&client, &token_info.token, matches.value_of("message"))
+        set_message(
+            &client,
+            &token_info.token,
+            matches.value_of("message"),
+            matches.is_present("pin")
+        )
     )?;
 
     print!(
@@ -269,7 +291,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let token_info = get_presence_token(&default_path).expect("Failed to get token");
     let _ = futures::try_join!(
         set_availability(&client, &token_info.token, &Presence::Reset),
-        set_message(&client, &token_info.token, None)
+        set_message(&client, &token_info.token, None, false)
     )?;
 
     println!("Your status has been reset");
