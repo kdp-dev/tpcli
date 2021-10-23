@@ -1,4 +1,4 @@
-use clap::{arg_enum, value_t, App, Arg};
+use clap::{crate_version, App, Arg};
 use db_key::Key;
 use fs_extra::dir::{copy as copy_dir, CopyOptions};
 use futures;
@@ -10,7 +10,7 @@ use leveldb::{
     options::{Options, ReadOptions},
 };
 use serde::Deserialize;
-use std::{cmp::Reverse, time::SystemTime};
+use std::{cmp::Reverse, str::FromStr, time::SystemTime};
 use std::{
     env, fs,
     io::{stdin, stdout, Write},
@@ -119,16 +119,46 @@ fn get_presence_token(db_path: &Path) -> Result<PresenceToken, Error> {
     }
 }
 
-arg_enum! {
-    #[derive(Debug)]
-    pub enum Presence {
-        Available,
-        Busy,
-        DoNotDisturb,
-        BeRightBack,
-        Away,
-        Offline,
-        Reset,
+#[derive(Debug)]
+enum Presence {
+    Available,
+    Busy,
+    DoNotDisturb,
+    BeRightBack,
+    Away,
+    Offline,
+    Reset,
+}
+
+impl FromStr for Presence {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "available" => Ok(Presence::Available),
+            "busy" => Ok(Presence::Busy),
+            "do_not_disturb" => Ok(Presence::DoNotDisturb),
+            "be_right_back" => Ok(Presence::BeRightBack),
+            "away" => Ok(Presence::Away),
+            "offline" => Ok(Presence::Offline),
+            "reset" => Ok(Presence::Reset),
+            _ => Err("No match"),
+        }
+    }
+}
+
+impl ToString for Presence {
+    fn to_string(&self) -> String {
+        String::from_str(match self {
+            Presence::Available => "available",
+            Presence::Busy => "busy",
+            Presence::DoNotDisturb => "do_not_disturb",
+            Presence::BeRightBack => "be_right_back",
+            Presence::Away => "away",
+            Presence::Offline => "offline",
+            Presence::Reset => "reset",
+        })
+        .unwrap()
     }
 }
 
@@ -170,8 +200,7 @@ async fn set_message(
     let request = Request::builder()
         .method(Method::PUT)
         .uri("https://presence.teams.microsoft.com/v1/me/publishnote")
-        // .header("Authorization", format!("Bearer {}", token))
-        .header("x-skypetoken", token)
+        .header("Authorization", format!("Bearer {}", token))
         .header("Content-Type", "application/json")
         .body(Body::from(format!(
             "{{\"message\":\"{}\",\"expiry\":\"9999-12-31T05:00:00.000Z\"}}",
@@ -186,19 +215,20 @@ async fn set_message(
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let matches = App::new("tpm (Teams Presence Management)")
-        .version("0.1.0")
+        .version(crate_version!())
         .about("Easily manage your MS Teams presence")
         .arg(
             Arg::with_name("status")
                 .possible_values(&[
-                    "Available",
-                    "Busy",
-                    "DoNotDisturb",
-                    "BeRightBack",
-                    "Away",
-                    "Offline",
+                    "available",
+                    "busy",
+                    "do_not_disturb",
+                    "be_right_back",
+                    "away",
+                    "offline",
                 ])
                 .takes_value(true)
+                .required(true)
                 .help("Teams status"),
         )
         .arg(
@@ -210,7 +240,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         )
         .get_matches();
 
-    let presence_to_set = value_t!(matches, "status", Presence).unwrap_or_else(|e| e.exit());
+    let presence_to_set = Presence::from_str(matches.value_of("status").unwrap()).unwrap();
 
     let default_path = get_teams_db_path();
 
