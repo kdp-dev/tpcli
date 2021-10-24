@@ -18,6 +18,10 @@ regex = "1.5"
 fs_extra = "1.2"
 futures = "0.3"
 clap = "2.33"
+chrono = "0.4"
+const_format = "0.2.22"
+humantime = "2.1.0"
+colored = "2.0.0"
 
 [profile.release]
 opt-level = "z"  # Optimize for size.

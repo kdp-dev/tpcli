@@ -1,7 +1,10 @@
+use chrono::{DateTime, Duration, SecondsFormat, Utc};
 use clap::{crate_version, App, Arg};
+use colored::*;
 use db_key::Key;
 use fs_extra::dir::{copy as copy_dir, CopyOptions};
 use futures;
+use humantime::parse_duration;
 use hyper::{client::HttpConnector, Body, Client, Method, Request};
 use hyper_tls::HttpsConnector;
 use leveldb::{
@@ -162,19 +165,51 @@ impl ToString for Presence {
     }
 }
 
+impl Presence {
+    fn to_string_colored(&self) -> ColoredString {
+        match self {
+            Presence::Available => "available".green(),
+            Presence::Busy => "busy".red(),
+            Presence::DoNotDisturb => "do_not_disturb".red(),
+            Presence::BeRightBack => "be_right_back".yellow(),
+            Presence::Away => "away".yellow(),
+            Presence::Offline => "offline".white(),
+            Presence::Reset => "reset".clear(),
+        }
+    }
+}
+
 async fn set_availability(
     client: &Client<HttpsConnector<HttpConnector>>,
     token: &str,
     presence: &Presence,
+    expiration: Option<DateTime<Utc>>,
 ) -> Result<(), hyper::http::Error> {
+    let formatted_expiration = match expiration {
+        Some(expiration) => format!(
+            ",\"desiredExpirationTime\":\"{}\"",
+            expiration.to_rfc3339_opts(SecondsFormat::Millis, true)
+        ),
+        None => "".to_string(),
+    };
+
     let request_body = match presence {
-        Presence::Available => "{\"availability\":\"Away\"}",
-        Presence::Busy => "{\"availability\":\"Busy\"}",
-        Presence::DoNotDisturb => "{\"availability\":\"DoNotDisturb\"}",
-        Presence::BeRightBack => "{\"availability\":\"BeRightBack\"}",
-        Presence::Away => "{\"availability\":\"Away\"}",
-        Presence::Offline => "{\"availability\":\"Offline\",\"activity\":\"OffWork\"}",
-        Presence::Reset => "",
+        Presence::Available => format!("{{\"availability\":\"Away\"{}}}", formatted_expiration),
+        Presence::Busy => format!("{{\"availability\":\"Busy\"{}}}", formatted_expiration),
+        Presence::DoNotDisturb => format!(
+            "{{\"availability\":\"DoNotDisturb\"{}}}",
+            formatted_expiration
+        ),
+        Presence::BeRightBack => format!(
+            "{{\"availability\":\"BeRightBack\"{}}}",
+            formatted_expiration
+        ),
+        Presence::Away => format!("{{\"availability\":\"Away\"{}}}", formatted_expiration),
+        Presence::Offline => format!(
+            "{{\"availability\":\"Offline\",\"activity\":\"OffWork\"{}}}",
+            formatted_expiration
+        ),
+        Presence::Reset => "".to_string(),
     };
     let mut builder = Request::builder()
         .method(Method::PUT)
@@ -197,6 +232,7 @@ async fn set_message(
     token: &str,
     message: Option<&str>,
     pin: bool,
+    expiration: Option<DateTime<Utc>>,
 ) -> Result<(), hyper::http::Error> {
     let request = Request::builder()
         .method(Method::PUT)
@@ -204,7 +240,7 @@ async fn set_message(
         .header("Authorization", format!("Bearer {}", token))
         .header("Content-Type", "application/json")
         .body(Body::from(format!(
-            "{{\"message\":\"{}\",\"expiry\":\"9999-12-31T05:00:00.000Z\"}}",
+            "{{\"message\":\"{}\",\"expiry\":\"{}\"}}",
             match message {
                 Some(message) => format!(
                     "{}{}",
@@ -212,6 +248,10 @@ async fn set_message(
                     if pin { "<pinnednote></pinnednote>" } else { "" }
                 ),
                 None => "".to_string(),
+            },
+            match expiration {
+                Some(expiration) => expiration.to_rfc3339_opts(SecondsFormat::Millis, true),
+                None => "9999-12-31T05:00:00.000Z".to_string(),
             }
         )))?;
 
@@ -255,7 +295,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 .requires("message")
                 .help("Show message when people send me a message"),
         )
+        .arg(
+            Arg::with_name("reset_in")
+                .short("i")
+                .long("reset-in")
+                .takes_value(true)
+                .help("Reset status and message in this amount of time"),
+        )
+        .arg(
+            Arg::with_name("reset_at")
+                .short("a")
+                .long("reset-at")
+                .takes_value(true)
+                .conflicts_with("reset_in")
+                .help("Reset status and message at this date and time"),
+        )
         .get_matches();
+
+    let expiration_date_time: Option<DateTime<Utc>> = match matches.value_of("reset_in") {
+        Some(duration) => {
+            let now = Utc::now();
+            let parsed_duration =
+                parse_duration(duration).expect("Failed to parse `reset_in` arg duration");
+            Some(now + Duration::from_std(parsed_duration).unwrap())
+        }
+        None => match matches.value_of("reset_at") {
+            Some(date_time_str) => {
+                // DateTime::parse_from_str("8/5/1994 8:00 AM +00:00", "%m/%d/%Y %H:%M %p %:z")?;
+                Some(DateTime::from(
+                    DateTime::parse_from_str(date_time_str, "%m/%d/%Y %H:%M %p %:z")
+                        .expect("Failed to parse `reset_at` date and time"),
+                ))
+            }
+            None => None,
+        },
+    };
 
     let presence_to_set = Presence::from_str(matches.value_of("status").unwrap()).unwrap();
 
@@ -267,31 +341,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let client = Client::builder().build::<_, hyper::Body>(https);
 
     let _ = futures::try_join!(
-        set_availability(&client, &token_info.token, &presence_to_set),
+        set_availability(
+            &client,
+            &token_info.token,
+            &presence_to_set,
+            expiration_date_time
+        ),
         set_message(
             &client,
             &token_info.token,
             matches.value_of("message"),
-            matches.is_present("pin")
+            matches.is_present("pin"),
+            expiration_date_time
         )
     )?;
 
-    print!(
-        "Your status is {}{}. Press enter to clear: ",
-        &presence_to_set.to_string(),
+    println!(
+        "Your status is {}{}{}.",
+        &presence_to_set.to_string_colored(),
         match matches.value_of("message") {
-            Some(v) => format!(" with message \"{}\"", v),
+            Some(v) => format!(" with message \"{}\"", v.cyan()),
+            None => "".to_string(),
+        },
+        match expiration_date_time {
+            Some(expiration) => format!(
+                ", expiring at {}",
+                expiration
+                    .format("%m/%d/%Y %H:%M %p %:z")
+                    .to_string()
+                    .purple()
+            ),
             None => "".to_string(),
         }
     );
+
+    if expiration_date_time.is_some() {
+        std::process::exit(0);
+    }
+
+    print!("Press {} to clear: ", "enter".green());
+
     let _ = stdout().flush();
     let mut s = String::new();
     stdin().read_line(&mut s)?;
 
     let token_info = get_presence_token(&default_path).expect("Failed to get token");
     let _ = futures::try_join!(
-        set_availability(&client, &token_info.token, &Presence::Reset),
-        set_message(&client, &token_info.token, None, false)
+        set_availability(&client, &token_info.token, &Presence::Reset, None),
+        set_message(&client, &token_info.token, None, false, None)
     )?;
 
     println!("Your status has been reset");
