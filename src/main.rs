@@ -356,7 +356,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         )
     )?;
 
-    println!(
+    print!(
         "Your status is {}{}{}.",
         &presence_to_set.to_string_colored(),
         match matches.value_of("message") {
@@ -376,10 +376,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
 
     if expiration_date_time.is_some() {
+        println!();
         std::process::exit(0);
     }
 
-    print!("Press {} to clear: ", "enter".green());
+    print!(" Press {} to clear: ", "enter".green());
 
     let _ = stdout().flush();
     let mut s = String::new();
