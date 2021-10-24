@@ -12,7 +12,7 @@ use leveldb::{
     iterator::Iterable,
     options::{Options, ReadOptions},
 };
-use serde::Deserialize;
+use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use std::{cmp::Reverse, str::FromStr, time::SystemTime};
 use std::{
     env, fs,
@@ -122,7 +122,7 @@ fn get_presence_token(db_path: &Path) -> Result<PresenceToken, Error> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 enum Presence {
     Available,
     Busy,
@@ -179,38 +179,52 @@ impl Presence {
     }
 }
 
+struct Availability<'a> {
+    availability: &'a Presence,
+    activity: Option<String>,
+    desired_expiration_time: Option<DateTime<Utc>>,
+}
+
+impl Serialize for Availability<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("Availability", 3)?;
+        state.serialize_field("availability", &self.availability)?;
+        if let Some(activity) = &self.activity {
+            state.serialize_field("activity", &activity)?;
+        }
+        if let Some(expiration) = &self.desired_expiration_time {
+            state.serialize_field(
+                "desiredExpirationTime",
+                &expiration.to_rfc3339_opts(SecondsFormat::Millis, true),
+            )?;
+        }
+        state.end()
+    }
+}
+
 async fn set_availability(
     client: &Client<HttpsConnector<HttpConnector>>,
     token: &str,
     presence: &Presence,
     expiration: Option<DateTime<Utc>>,
 ) -> Result<(), hyper::http::Error> {
-    let formatted_expiration = match expiration {
-        Some(expiration) => format!(
-            ",\"desiredExpirationTime\":\"{}\"",
-            expiration.to_rfc3339_opts(SecondsFormat::Millis, true)
-        ),
-        None => "".to_string(),
+    let availability = Availability {
+        availability: presence,
+        activity: match presence {
+            &Presence::Offline => Some("OffWork".to_string()),
+            _ => None,
+        },
+        desired_expiration_time: expiration,
     };
 
     let request_body = match presence {
-        Presence::Available => format!("{{\"availability\":\"Away\"{}}}", formatted_expiration),
-        Presence::Busy => format!("{{\"availability\":\"Busy\"{}}}", formatted_expiration),
-        Presence::DoNotDisturb => format!(
-            "{{\"availability\":\"DoNotDisturb\"{}}}",
-            formatted_expiration
-        ),
-        Presence::BeRightBack => format!(
-            "{{\"availability\":\"BeRightBack\"{}}}",
-            formatted_expiration
-        ),
-        Presence::Away => format!("{{\"availability\":\"Away\"{}}}", formatted_expiration),
-        Presence::Offline => format!(
-            "{{\"availability\":\"Offline\",\"activity\":\"OffWork\"{}}}",
-            formatted_expiration
-        ),
-        Presence::Reset => "".to_string(),
+        &Presence::Reset => "".to_string(),
+        _ => serde_json::to_string(&availability).unwrap(),
     };
+
     let mut builder = Request::builder()
         .method(Method::PUT)
         .uri("https://presence.teams.microsoft.com/v1/me/forceavailability/")
