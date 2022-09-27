@@ -536,6 +536,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     //     println!("Found person {:?}", person.unwrap());
     // }
 
+    #[cfg(target_os = "windows")]
+    ansi_term::enable_ansi_support();
+
     // std::process::exit(0);
     let matches = App::new("tpcli (Teams Presence CLI)")
         .version(crate_version!())
