@@ -1,0 +1,126 @@
+name: Build binaries
+
+# on: [push]
+
+on:
+  # push:
+  #   branches:
+  #     - master
+  #     - windows-store-distribution
+  create:
+    tags: [v*]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Cargo cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            target/
+          key: ${{ runner.os }}-x86_64-pc-windows-msvc-target
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Zip binary
+        working-directory: ./target/release
+        run: Compress-Archive -Path tpcli.exe -DestinationPath ./tpcli-x86_64-pc-windows-msvc.zip
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: tpcli-x86_64-pc-windows-msvc
+          path: target/release/tpcli-x86_64-pc-windows-msvc.zip
+
+      - name: Remove zip and binary
+        working-directory: ./target/release
+        run: rm tpcli-x86_64-pc-windows-msvc.zip, tpcli.exe
+
+  build-macos:
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        target: [x86_64-apple-darwin, aarch64-apple-darwin]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Cargo cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            target/
+          key: ${{ runner.os }}-${{ matrix.target }}-target
+
+      - name: Build binary
+        run: cargo build --release
+
+      - name: Strip symbols
+        working-directory: ./target/release
+        run: strip tpcli
+
+      - name: Tar binary
+        working-directory: ./target/release
+        run: tar czvf tpcli-${{ matrix.target }}.tgz tpcli
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: tpcli-${{ matrix.target }}
+          path: target/release/tpcli-${{ matrix.target }}.tgz
+
+      - name: Remove tar and binary
+        working-directory: ./target/release
+        run: rm tpcli-${{ matrix.target }}.tgz tpcli
+
+  # build-linux:
+  #   runs-on: ubuntu-latest
+
+  #   strategy:
+  #     matrix:
+  #       target: [x86_64-unknown-linux-musl, aarch64-unknown-linux-musl]
+
+  #   steps:
+  #     - uses: actions/checkout@v3
+
+  #     - name: Add target
+  #       run: rustup target add ${{ matrix.target }}
+
+  #     - name: Cargo cache
+  #       uses: actions/cache@v3
+  #       with:
+  #         path: |
+  #           ~/.cargo/registry/index/
+  #           ~/.cargo/registry/cache/
+  #           target/
+  #         key: ${{ runner.os }}-${{ matrix.target }}--target
+
+  #     - name: Build binary
+  #       run: cargo build --release
+
+  #     - name: Tar binary
+  #       working-directory: ./target/release
+  #       run: tar czvf tpcli-${{ matrix.target }}.tgz tpcli
+
+  #     - uses: actions/upload-artifact@v3
+  #       with:
+  #         name: tpcli-${{ matrix.target }}
+  #         path: target/release/tpcli-${{ matrix.target }}.tgz
+
+  #     - name: Remove tar and binary
+  #       working-directory: ./target/release
+  #       run: rm tpcli-${{ matrix.target }}.tgz tpcli
