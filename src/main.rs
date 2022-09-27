@@ -519,22 +519,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 .required(false)
                 .takes_value(false)
                 .requires("message")
-                .help("Show message when people send me a message"),
+                .help("Display my status message when people go to send me a message"),
         )
         .arg(
             Arg::with_name("reset_in")
-                .short("i")
-                .long("reset-in")
+                // .short("i")
+                .long("--in")
                 .takes_value(true)
-                .help("Reset status and message in this amount of time"),
+                .help("Reset status and message after this amount of time (e.g. 10m)"),
         )
         .arg(
             Arg::with_name("reset_at")
-                .short("a")
-                .long("reset-at")
+                // .short("a")
+                .long("--at")
                 .takes_value(true)
                 .conflicts_with("reset_in")
-                .help("Reset status and message at this date and time"),
+                .help("Reset status and message at this time"),
         )
         .get_matches();
 
@@ -614,7 +614,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     )
     .await?;
 
-    println!("Your status has been reset");
+    println!("Your status has been reset.");
 
     Ok(())
 }
