@@ -45,6 +45,26 @@ struct PresenceToken {
 }
 
 fn get_teams_db_path() -> PathBuf {
+struct Jwt {
+    token: String,
+}
+
+impl Jwt {
+    fn exp(&self) -> u64 {
+        let payload = self.token.split('.').nth(1).unwrap();
+        let decoded_payload = decode(payload).unwrap();
+        let decoded_payload = str::from_utf8(&decoded_payload).unwrap();
+        let payload_object: serde_json::Value = serde_json::from_str(decoded_payload).unwrap();
+        let exp = payload_object["exp"].as_u64().unwrap();
+        exp
+        // let now = SystemTime::now()
+        //     .duration_since(SystemTime::UNIX_EPOCH)
+        //     .unwrap()
+        //     .as_secs();
+        // let exp = exp - now;
+        // println!("Token expires in {} seconds", exp);
+    }
+}
 // enum Browser {
 //     Chrome,
 //     Teams,
@@ -134,20 +154,27 @@ fn get_presence_token(db_path: &Path) -> Result<PresenceToken, Error> {
         .filter(|(k, _)| {
             k.starts_with("_https://teams.microsoft.com\u{0}\u{1}ts.")
                 && k.ends_with(".cache.token.https://presence.teams.microsoft.com/")
+
+fn get_sqlite_tokens() -> Jwt {
+    let sqlite_path = teams_sqlite_path();
+    let conn = Connection::open(sqlite_path).unwrap();
+    let mut stmt = conn
+        .prepare("select value from cookies where name = 'skypetoken_asm'")
+        .unwrap();
+    let mut tokens: Vec<Jwt> = stmt
+        .query_map([], |row| {
+            Ok(row.get_unwrap(0))
         })
-        .map(|(_, v)| -> PresenceToken {
-            serde_json::from_slice(&v[1..]).expect("Failed to parse presence token info")
+        .unwrap()
+        .map(|res| Jwt {
+            token: res.unwrap(),
         })
-        .filter(|token_info| token_info.expiration > cur_epoch)
         .collect();
 
-    tokens.sort_by_key(|token| Reverse(token.expiration));
+    tokens.sort_by_key(|token| Reverse(token.exp()));
+    assert!(tokens.len() >= 1, "No tokens found in MS Teams cookie db");
 
-    if tokens.iter().count() >= 1 {
-        Ok(tokens.remove(0))
-    } else {
-        Err(Error::PresenceTokenNotFound)
-    }
+    tokens.remove(0)
 }
 
 #[derive(Debug, Serialize)]
