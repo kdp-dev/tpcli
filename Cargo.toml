@@ -25,6 +25,7 @@ colored = "2.0.0"
 rusqlite = { version = "0.28", features = ["bundled"] }
 base64 = "0.13.0"
 urlencoding = "2.1.2"
+ansi_term = "0.12"
 
 [profile.release]
 opt-level = "z"  # Optimize for size.
