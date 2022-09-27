@@ -1,6 +1,13 @@
 # tpcli (Teams Presence CLI)
 
-<img alt="Language: Rust" src="https://img.shields.io/badge/language-Rust-orange">
+<p align="center">
+  <img alt="tpcli demo gif" src="img/tpcli_demo.gif">
+</p>
+<hr>
+<p align="center">
+  <img alt="GitHub" src="https://img.shields.io/github/license/KYDronePilot/google-meet-monitor-ext">
+  <img alt="Language: Rust" src="https://img.shields.io/badge/language-Rust-orange"><br>
+</p>
 
 ## Features
 
