@@ -1,3 +1,4 @@
+use base64::{decode, encode};
 use chrono::{DateTime, Duration, SecondsFormat, Utc};
 use clap::{crate_version, App, Arg};
 use colored::*;
@@ -12,6 +13,7 @@ use leveldb::{
     iterator::Iterable,
     options::{Options, ReadOptions},
 };
+use rusqlite::{Connection, Result};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use std::{cmp::Reverse, str::FromStr, time::SystemTime};
 use std::{
@@ -44,7 +46,13 @@ struct PresenceToken {
     expiration: u64,
 }
 
-fn get_teams_db_path() -> PathBuf {
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct SkypeToken {
+    skype_token: String,
+    expiration: u64,
+}
+
 struct Jwt {
     token: String,
 }
@@ -65,6 +73,7 @@ impl Jwt {
         // println!("Token expires in {} seconds", exp);
     }
 }
+
 // enum Browser {
 //     Chrome,
 //     Teams,
@@ -75,7 +84,7 @@ impl Jwt {
 //     Sqlite,
 // }
 
-fn teams_sql_path() -> PathBuf {
+fn teams_sqlite_path() -> PathBuf {
     if cfg!(target_os = "macos") {
         let home = PathBuf::from(env::var("HOME").unwrap_or(String::from("~")));
         home.join("Library")
@@ -126,11 +135,12 @@ enum Error {
     PresenceTokenNotFound,
 }
 
-fn get_presence_token(db_path: &Path) -> Result<PresenceToken, Error> {
+fn get_leveldb_tokens() -> (Option<PresenceToken>, Option<SkypeToken>) {
+    let leveldb_path = chrome_leveldb_path();
     let temp_db_dir = tempdir().unwrap();
-
     let options = CopyOptions::new();
-    copy_dir(db_path, &temp_db_dir.path(), &options).expect("Error copying leveldb to temp dir");
+    copy_dir(leveldb_path, &temp_db_dir.path(), &options)
+        .expect("Error copying leveldb to temp dir");
 
     let leveldb_path = temp_db_dir.path().join("leveldb");
     let lock_file = leveldb_path.join("LOCK");
@@ -148,12 +158,66 @@ fn get_presence_token(db_path: &Path) -> Result<PresenceToken, Error> {
         .as_secs();
 
     let iter_read_opts = ReadOptions::new();
-    let mut tokens: Vec<PresenceToken> = database
-        .iter(iter_read_opts)
-        .map(|(k, v)| (String::from_utf8(k.key).unwrap_or(String::from("")), v))
-        .filter(|(k, _)| {
-            k.starts_with("_https://teams.microsoft.com\u{0}\u{1}ts.")
-                && k.ends_with(".cache.token.https://presence.teams.microsoft.com/")
+    // let mut tokens: Vec<SkypeToken> = database
+    //     .iter(iter_read_opts)
+    //     .map(|(k, v)| {
+    //         // println!("{:?}", k);
+    //         (String::from_utf8(k.key).unwrap_or(String::from("")), v)
+    //     })
+    //     .filter(|(k, _)| {
+    //         println!("{:?}", k);
+    //         k.contains("auth.skype.token")
+    //         // k.starts_with("_https://teams.microsoft.com\u{0}\u{1}ts.")
+    //         //     && k.ends_with(".cache.token.https://presence.teams.microsoft.com/")
+    //     })
+    //     .map(|(_, v)| -> SkypeToken {
+    //         println!("{}", String::from_utf8(v.clone()).unwrap());
+    //         serde_json::from_slice(&v[1..]).expect("Failed to parse presence token info")
+    //     })
+    //     .filter(|token_info| token_info.expiration > cur_epoch)
+    //     .collect();
+
+    let mut skype_tokens: Vec<SkypeToken> = Vec::default();
+    let mut presence_tokens: Vec<PresenceToken> = Vec::default();
+    for (key, value) in database.iter(iter_read_opts) {
+        let key = String::from_utf8(key.key).unwrap_or(String::from(""));
+        // let value2 = String::from_utf8(value.clone()).unwrap_or(String::from(""));
+        // println!("{}: {}", key, value2);
+        if key.ends_with("auth.skype.token") {
+            let new_skype_token: SkypeToken =
+                serde_json::from_slice(&value[1..]).expect("Failed to parse skype token info");
+            // println!("Skype token hit: {:?}", &new_skype_token);
+            if new_skype_token.expiration > cur_epoch {
+                skype_tokens.push(new_skype_token)
+            }
+        } else if key.ends_with(".cache.token.https://presence.teams.microsoft.com/") {
+            let new_presence_token: PresenceToken =
+                serde_json::from_slice(&value[1..]).expect("Failed to parse presence token info");
+            if new_presence_token.expiration > cur_epoch {
+                presence_tokens.push(new_presence_token)
+            }
+        }
+    }
+
+    skype_tokens.sort_by_key(|token| Reverse(token.expiration));
+    presence_tokens.sort_by_key(|token| Reverse(token.expiration));
+
+    println!("{:?}", skype_tokens);
+    println!("{:?}", presence_tokens);
+
+    (
+        presence_tokens.into_iter().next(),
+        skype_tokens.into_iter().next(),
+    )
+
+    // if tokens.iter().count() >= 1 {
+    //     // Ok(tokens.remove(0))
+    //     Err(Error::PresenceTokenNotFound)
+    // } else {
+    //     Err(Error::PresenceTokenNotFound)
+    // }
+    // Err(Error::PresenceTokenNotFound)
+}
 
 fn get_sqlite_tokens() -> Jwt {
     let sqlite_path = teams_sqlite_path();
@@ -162,9 +226,7 @@ fn get_sqlite_tokens() -> Jwt {
         .prepare("select value from cookies where name = 'skypetoken_asm'")
         .unwrap();
     let mut tokens: Vec<Jwt> = stmt
-        .query_map([], |row| {
-            Ok(row.get_unwrap(0))
-        })
+        .query_map([], |row| Ok(row.get_unwrap(0)))
         .unwrap()
         .map(|res| Jwt {
             token: res.unwrap(),
@@ -260,9 +322,16 @@ impl Serialize for Availability<'_> {
     }
 }
 
+#[derive(Clone, Copy)]
+enum AccountType {
+    Microsoft,
+    Live,
+}
+
 async fn set_availability(
     client: &Client<HttpsConnector<HttpConnector>>,
     token: &str,
+    account_type: AccountType,
     presence: &Presence,
     expiration: Option<DateTime<Utc>>,
 ) -> Result<(), hyper::http::Error> {
@@ -282,8 +351,24 @@ async fn set_availability(
 
     let mut builder = Request::builder()
         .method(Method::PUT)
-        .uri("https://presence.teams.microsoft.com/v1/me/forceavailability/")
-        .header("Authorization", format!("Bearer {}", token));
+        .uri(format!(
+            "https://presence.teams.{}.com/v1/me/forceavailability/",
+            match account_type {
+                AccountType::Microsoft => "microsoft",
+                AccountType::Live => "live",
+            }
+        ))
+        .header("x-ms-client-consumer-type", "teams4life");
+
+    match account_type {
+        AccountType::Microsoft => {
+            builder = builder.header("Authorization", format!("Bearer {}", token));
+        }
+        AccountType::Live => {
+            builder = builder.header("x-skypetoken", token);
+        }
+    }
+
     if request_body != "" {
         builder = builder.header("Content-Type", "application/json");
     } else {
@@ -299,41 +384,68 @@ async fn set_availability(
 async fn set_message(
     client: &Client<HttpsConnector<HttpConnector>>,
     token: &str,
+    account_type: AccountType,
     message: Option<&str>,
     pin: bool,
     expiration: Option<DateTime<Utc>>,
 ) -> Result<(), hyper::http::Error> {
-    let request = Request::builder()
+    let mut builder = Request::builder()
         .method(Method::PUT)
-        .uri("https://presence.teams.microsoft.com/v1/me/publishnote")
-        .header("Authorization", format!("Bearer {}", token))
-        .header("Content-Type", "application/json")
-        .body(Body::from(format!(
-            "{{\"message\":\"{}\",\"expiry\":\"{}\"}}",
-            match message {
-                Some(message) => format!(
-                    "{}{}",
-                    message,
-                    if pin { "<pinnednote></pinnednote>" } else { "" }
-                ),
-                None => "".to_string(),
-            },
-            match expiration {
-                Some(expiration) => expiration.to_rfc3339_opts(SecondsFormat::Millis, true),
-                None => "9999-12-31T05:00:00.000Z".to_string(),
+        .uri(format!(
+            "https://presence.teams.{}.com/v1/me/publishnote",
+            match account_type {
+                AccountType::Microsoft => "microsoft",
+                AccountType::Live => "live",
             }
-        )))?;
+        ))
+        .header("x-ms-client-consumer-type", "teams4life")
+        .header("Content-Type", "application/json");
+
+    match account_type {
+        AccountType::Microsoft => {
+            builder = builder.header("Authorization", format!("Bearer {}", token));
+        }
+        AccountType::Live => {
+            builder = builder.header("x-skypetoken", token);
+        }
+    }
+
+    let request = builder.body(Body::from(format!(
+        "{{\"message\":\"{}\",\"expiry\":\"{}\"}}",
+        match message {
+            Some(message) => format!(
+                "{}{}",
+                message,
+                if pin { "<pinnednote></pinnednote>" } else { "" }
+            ),
+            None => "".to_string(),
+        },
+        match expiration {
+            Some(expiration) => expiration.to_rfc3339_opts(SecondsFormat::Millis, true),
+            None => "9999-12-31T05:00:00.000Z".to_string(),
+        }
+    )))?;
 
     let resp = client.request(request).await.unwrap();
     assert_eq!(resp.status(), 200);
     Ok::<(), hyper::http::Error>(())
 }
 
+enum InstanceType {
+    TeamsApp,
+    Chrome,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let matches = App::new("tpm (Teams Presence Management)")
+    // for person in person_iter {
+    //     println!("Found person {:?}", person.unwrap());
+    // }
+
+    // std::process::exit(0);
+    let matches = App::new("tpcli (Teams Presence CLI)")
         .version(crate_version!())
-        .about("Easily manage your MS Teams presence")
+        .about("Easily control your Microsoft Teams presence with this CLI program")
         .arg(
             Arg::with_name("status")
                 .possible_values(&[
@@ -400,11 +512,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         },
     };
 
+    let account_type = AccountType::Live;
+    let instance_type = InstanceType::TeamsApp;
     let presence_to_set = Presence::from_str(matches.value_of("status").unwrap()).unwrap();
 
-    let default_path = get_teams_db_path();
+    // let default_path = get_teams_db_path();
 
-    let token_info = get_presence_token(&default_path).expect("Failed to get token");
+    let token: String;
+    match instance_type {
+        InstanceType::TeamsApp => {
+            let skype_token = get_sqlite_tokens();
+            match account_type {
+                AccountType::Microsoft => {
+                    panic!("non-live account Teams app not supported yet");
+                }
+                AccountType::Live => {
+                    token = skype_token.token;
+                }
+            }
+        }
+        InstanceType::Chrome => {
+            let (presence_token, skype_token) = get_leveldb_tokens();
+            match account_type {
+                AccountType::Microsoft => {
+                    token = presence_token.expect("Missing presence token").token;
+                }
+                AccountType::Live => {
+                    token = skype_token.expect("Missing skype token").skype_token;
+                }
+            }
+        }
+    }
 
     let https = HttpsConnector::new();
     let client = Client::builder().build::<_, hyper::Body>(https);
@@ -412,13 +550,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let _ = futures::try_join!(
         set_availability(
             &client,
-            &token_info.token,
+            &token,
+            account_type,
             &presence_to_set,
             expiration_date_time
         ),
         set_message(
             &client,
-            &token_info.token,
+            &token,
+            account_type,
             matches.value_of("message"),
             matches.is_present("pin"),
             expiration_date_time
@@ -455,10 +595,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut s = String::new();
     stdin().read_line(&mut s)?;
 
-    let token_info = get_presence_token(&default_path).expect("Failed to get token");
+    // let (presence_token, skype_token) = get_leveldb_tokens(&default_path);
+    let token: String;
+    match instance_type {
+        InstanceType::TeamsApp => {
+            let skype_token = get_sqlite_tokens();
+            match account_type {
+                AccountType::Microsoft => {
+                    panic!("non-live account Teams app not supported yet");
+                }
+                AccountType::Live => {
+                    token = skype_token.token;
+                }
+            }
+        }
+        InstanceType::Chrome => {
+            let (presence_token, skype_token) = get_leveldb_tokens();
+            match account_type {
+                AccountType::Microsoft => {
+                    token = presence_token.expect("Missing presence token").token;
+                }
+                AccountType::Live => {
+                    token = skype_token.expect("Missing skype token").skype_token;
+                }
+            }
+        }
+    }
+
     let _ = futures::try_join!(
-        set_availability(&client, &token_info.token, &Presence::Reset, None),
-        set_message(&client, &token_info.token, None, false, None)
+        set_availability(&client, &token, account_type, &Presence::Reset, None),
+        set_message(&client, &token, account_type, None, false, None)
     )?;
 
     println!("Your status has been reset");

@@ -1,7 +1,7 @@
 [package]
-name = "tpm"
-version = "0.1.0"
-edition = "2018"
+name = "tpcli"
+version = "1.0.0"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -22,9 +22,11 @@ chrono = "0.4"
 const_format = "0.2.22"
 humantime = "2.1.0"
 colored = "2.0.0"
+rusqlite = { version = "0.28", features = ["bundled"] }
+base64 = "0.13.0"
 
 [profile.release]
 opt-level = "z"  # Optimize for size.
 lto = true
 codegen-units = 1
-panic = "abort"
+# panic = "abort"
