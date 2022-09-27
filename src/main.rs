@@ -95,6 +95,9 @@ fn teams_sqlite_path(partition: bool) -> PathBuf {
         let app_data = PathBuf::from(env::var("APPDATA").expect("APPDATA env var not found"));
         app_data.join("Microsoft").join("Teams")
     } else if cfg!(target_os = "linux") {
+        if partition {
+            panic!("`--account live` using the Teams app is not supported on linux. Please use Chrome instead.");
+        }
         let home = PathBuf::from(env::var("HOME").unwrap_or(String::from("~")));
         home.join(".config")
             .join("Microsoft")
