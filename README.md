@@ -12,15 +12,26 @@
 
 ## Features
 
-- Control both you Teams status and message with one simple command.
+- Control both your Teams status and message with one simple command.
 - Specify a precise expiration time or duration on your status.
-- Leave the expiration blank, and `tpcli` will wait for you to clear your status, on-demand, by pressing the enter key.
+- Leave the expiration blank, and `tpcli` will wait for you to clear your status on-demand, by pressing the enter key.
 
 ## Pre-requisites
 
 You must be logged into Teams on your computer, either in Google Chrome or the Teams app.
 
 - `tpcli` uses auth tokens stored in Chrome/Electron cookies to authenticate itself.
+
+## Examples
+
+```bash
+# Display message "Lunch break" with status `away`. Wait for user input to clear.
+tpcli -m 'Lunch break' away
+
+# Set pinned status and message, clearing after 1 hour.
+# Get auth token for personal Teams account (live.com) from Chrome cookies
+tpcli --account live --app chrome --in 1hr --pin -m 'Important meeting' do_not_disturb
+```
 
 ## Usage
 
