@@ -522,35 +522,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 .help("Display my status message when people go to send me a message"),
         )
         .arg(
-            Arg::with_name("reset_in")
+            Arg::with_name("time-duration")
                 // .short("i")
                 .long("--in")
                 .takes_value(true)
                 .help("Reset status and message after this amount of time (e.g. 10m)"),
         )
         .arg(
-            Arg::with_name("reset_at")
+            Arg::with_name("expiration-time")
                 // .short("a")
                 .long("--at")
                 .takes_value(true)
-                .conflicts_with("reset_in")
+                .conflicts_with("time-duration")
                 .help("Reset status and message at this time"),
         )
         .get_matches();
 
-    let expiration_date_time: Option<DateTime<Utc>> = match matches.value_of("reset_in") {
+    let expiration_date_time: Option<DateTime<Utc>> = match matches.value_of("time-duration") {
         Some(duration) => {
             let now = Utc::now();
             let parsed_duration =
-                parse_duration(duration).expect("Failed to parse `reset_in` arg duration");
+                parse_duration(duration).expect("Failed to parse `--in` arg duration");
             Some(now + Duration::from_std(parsed_duration).unwrap())
         }
-        None => match matches.value_of("reset_at") {
+        None => match matches.value_of("expiration-time") {
             Some(date_time_str) => {
                 // DateTime::parse_from_str("8/5/1994 8:00 AM +00:00", "%m/%d/%Y %H:%M %p %:z")?;
                 Some(DateTime::from(
                     DateTime::parse_from_str(date_time_str, "%m/%d/%Y %H:%M %p %:z")
-                        .expect("Failed to parse `reset_at` date and time"),
+                        .expect("Failed to parse `--at` date and time"),
                 ))
             }
             None => None,
