@@ -94,6 +94,11 @@ fn teams_sqlite_path(partition: bool) -> PathBuf {
     } else if cfg!(target_os = "windows") {
         let app_data = PathBuf::from(env::var("APPDATA").expect("APPDATA env var not found"));
         app_data.join("Microsoft").join("Teams")
+    } else if cfg!(target_os = "linux") {
+        let home = PathBuf::from(env::var("HOME").unwrap_or(String::from("~")));
+        home.join(".config")
+            .join("Microsoft")
+            .join("Microsoft Teams")
     } else {
         panic!("Unsupported platform")
     };
@@ -125,6 +130,13 @@ fn chrome_leveldb_path() -> PathBuf {
         //     .join("Teams")
         //     .join("Local Storage")
         //     .join("leveldb")
+    } else if cfg!(target_os = "linux") {
+        let home = PathBuf::from(env::var("HOME").unwrap_or(String::from("~")));
+        home.join(".config")
+            .join("google-chrome")
+            .join("Default")
+            .join("Local Storage")
+            .join("leveldb")
     } else {
         panic!("Unsupported platform")
     }
