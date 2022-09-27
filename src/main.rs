@@ -431,9 +431,54 @@ async fn set_message(
     Ok::<(), hyper::http::Error>(())
 }
 
+#[derive(Clone, Copy)]
 enum InstanceType {
     TeamsApp,
     Chrome,
+}
+
+async fn set_both(
+    instance_type: InstanceType,
+    account_type: AccountType,
+    presence: &Presence,
+    expiration: Option<DateTime<Utc>>,
+    message: Option<&str>,
+    pin: bool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let token: String;
+    match instance_type {
+        InstanceType::TeamsApp => {
+            let skype_token = get_sqlite_tokens();
+            match account_type {
+                AccountType::Microsoft => {
+                    panic!("non-live account Teams app not supported yet");
+                }
+                AccountType::Live => {
+                    token = skype_token.token;
+                }
+            }
+        }
+        InstanceType::Chrome => {
+            let (presence_token, skype_token) = get_leveldb_tokens();
+            match account_type {
+                AccountType::Microsoft => {
+                    token = presence_token.expect("Missing presence token").token;
+                }
+                AccountType::Live => {
+                    token = skype_token.expect("Missing skype token").skype_token;
+                }
+            }
+        }
+    }
+
+    let https = HttpsConnector::new();
+    let client = Client::builder().build::<_, hyper::Body>(https);
+
+    let _ = futures::try_join!(
+        set_availability(&client, &token, account_type, &presence, expiration),
+        set_message(&client, &token, account_type, message, pin, expiration)
+    )?;
+    Ok(())
 }
 
 #[tokio::main]
@@ -518,52 +563,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // let default_path = get_teams_db_path();
 
-    let token: String;
-    match instance_type {
-        InstanceType::TeamsApp => {
-            let skype_token = get_sqlite_tokens();
-            match account_type {
-                AccountType::Microsoft => {
-                    panic!("non-live account Teams app not supported yet");
-                }
-                AccountType::Live => {
-                    token = skype_token.token;
-                }
-            }
-        }
-        InstanceType::Chrome => {
-            let (presence_token, skype_token) = get_leveldb_tokens();
-            match account_type {
-                AccountType::Microsoft => {
-                    token = presence_token.expect("Missing presence token").token;
-                }
-                AccountType::Live => {
-                    token = skype_token.expect("Missing skype token").skype_token;
-                }
-            }
-        }
-    }
-
-    let https = HttpsConnector::new();
-    let client = Client::builder().build::<_, hyper::Body>(https);
-
-    let _ = futures::try_join!(
-        set_availability(
-            &client,
-            &token,
-            account_type,
-            &presence_to_set,
-            expiration_date_time
-        ),
-        set_message(
-            &client,
-            &token,
-            account_type,
-            matches.value_of("message"),
-            matches.is_present("pin"),
-            expiration_date_time
-        )
-    )?;
+    set_both(
+        instance_type,
+        account_type,
+        &presence_to_set,
+        expiration_date_time,
+        matches.value_of("message"),
+        matches.is_present("pin"),
+    )
+    .await?;
 
     print!(
         "Your status is {}{}{}.",
@@ -586,7 +594,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     if expiration_date_time.is_some() {
         println!();
-        std::process::exit(0);
+        return Ok(());
     }
 
     print!(" Press {} to clear: ", "enter".green());
@@ -596,36 +604,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     stdin().read_line(&mut s)?;
 
     // let (presence_token, skype_token) = get_leveldb_tokens(&default_path);
-    let token: String;
-    match instance_type {
-        InstanceType::TeamsApp => {
-            let skype_token = get_sqlite_tokens();
-            match account_type {
-                AccountType::Microsoft => {
-                    panic!("non-live account Teams app not supported yet");
-                }
-                AccountType::Live => {
-                    token = skype_token.token;
-                }
-            }
-        }
-        InstanceType::Chrome => {
-            let (presence_token, skype_token) = get_leveldb_tokens();
-            match account_type {
-                AccountType::Microsoft => {
-                    token = presence_token.expect("Missing presence token").token;
-                }
-                AccountType::Live => {
-                    token = skype_token.expect("Missing skype token").skype_token;
-                }
-            }
-        }
-    }
-
-    let _ = futures::try_join!(
-        set_availability(&client, &token, account_type, &Presence::Reset, None),
-        set_message(&client, &token, account_type, None, false, None)
-    )?;
+    set_both(
+        instance_type,
+        account_type,
+        &Presence::Reset,
+        None,
+        None,
+        false,
+    )
+    .await?;
 
     println!("Your status has been reset");
 
