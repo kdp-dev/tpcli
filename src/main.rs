@@ -202,8 +202,8 @@ fn get_leveldb_tokens() -> (Option<PresenceToken>, Option<SkypeToken>) {
     skype_tokens.sort_by_key(|token| Reverse(token.expiration));
     presence_tokens.sort_by_key(|token| Reverse(token.expiration));
 
-    println!("{:?}", skype_tokens);
-    println!("{:?}", presence_tokens);
+    // println!("{:?}", skype_tokens);
+    // println!("{:?}", presence_tokens);
 
     (
         presence_tokens.into_iter().next(),
@@ -538,6 +538,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 .help("Teams status"),
         )
         .arg(
+            Arg::with_name("application-type")
+                // .short("m")
+                .long("--app")
+                .possible_values(&[
+                    "chrome",
+                    "teams",
+                ])
+                .default_value("teams")
+                .takes_value(true)
+                .help("Application to get authentication token from (Google Chrome or Microsoft Teams app)"),
+        )
+        .arg(
+            Arg::with_name("account-type")
+                // .short("m")
+                .long("--account")
+                .possible_values(&[
+                    "live",
+                    "ms",
+                ])
+                .default_value("ms")
+                .takes_value(true)
+                .help("Type of Teams account you have: microsoft.com or live.com (personal account)"),
+        )
+        .arg(
             Arg::with_name("message")
                 .short("m")
                 .long("message")
@@ -589,8 +613,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         },
     };
 
-    let account_type = AccountType::Microsoft;
-    let instance_type = InstanceType::TeamsApp;
+    let account_type = match matches.value_of("account-type").unwrap() {
+        "live" => AccountType::Live,
+        "ms" => AccountType::Microsoft,
+        _ => panic!("Invalid account type"),
+    };
+    let instance_type = match matches.value_of("application-type").unwrap() {
+        "chrome" => InstanceType::Chrome,
+        "teams" => InstanceType::TeamsApp,
+        _ => panic!("Invalid application type"),
+    };
     let presence_to_set = Presence::from_str(matches.value_of("status").unwrap()).unwrap();
 
     // let default_path = get_teams_db_path();
