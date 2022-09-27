@@ -1,5 +1,5 @@
 use base64::{decode, encode};
-use chrono::{DateTime, Duration, SecondsFormat, Utc};
+use chrono::{DateTime, Duration, Local, SecondsFormat, Utc};
 use clap::{crate_version, App, Arg};
 use colored::*;
 use db_key::Key;
@@ -583,8 +583,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         match expiration_date_time {
             Some(expiration) => format!(
                 ", expiring at {}",
-                expiration
-                    .format("%m/%d/%Y %H:%M %p %:z")
+                DateTime::<Local>::from(expiration)
+                    .format("%m/%d/%Y %I:%M %p")
                     .to_string()
                     .purple()
             ),
