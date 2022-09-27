@@ -1,4 +1,4 @@
-use base64::{decode, encode};
+use base64::decode;
 use chrono::{DateTime, Duration, Local, SecondsFormat, Utc};
 use clap::{crate_version, App, Arg};
 use colored::*;
@@ -19,7 +19,7 @@ use std::{cmp::Reverse, str::FromStr, time::SystemTime};
 use std::{
     env, fs,
     io::{stdin, stdout, Write},
-    path::{Path, PathBuf},
+    path::PathBuf,
     str,
 };
 use tempfile::tempdir;
@@ -118,7 +118,7 @@ fn chrome_leveldb_path() -> PathBuf {
             .join("Local Storage")
             .join("leveldb")
     } else if cfg!(target_os = "windows") {
-        let app_data = PathBuf::from(env::var("APPDATA").expect("APPDATA env var not found"));
+        // let app_data = PathBuf::from(env::var("APPDATA").expect("APPDATA env var not found"));
         panic!("Haven't implemented chrome leveldb path for windows yet")
         // app_data
         //     .join("Microsoft")
@@ -130,10 +130,10 @@ fn chrome_leveldb_path() -> PathBuf {
     }
 }
 
-#[derive(Debug)]
-enum Error {
-    PresenceTokenNotFound,
-}
+// #[derive(Debug)]
+// enum Error {
+//     PresenceTokenNotFound,
+// }
 
 fn get_leveldb_tokens() -> (Option<PresenceToken>, Option<SkypeToken>) {
     let leveldb_path = chrome_leveldb_path();
