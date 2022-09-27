@@ -45,6 +45,40 @@ struct PresenceToken {
 }
 
 fn get_teams_db_path() -> PathBuf {
+// enum Browser {
+//     Chrome,
+//     Teams,
+// }
+
+// enum PathType {
+//     Leveldb,
+//     Sqlite,
+// }
+
+fn teams_sql_path() -> PathBuf {
+    if cfg!(target_os = "macos") {
+        let home = PathBuf::from(env::var("HOME").unwrap_or(String::from("~")));
+        home.join("Library")
+            .join("Application Support")
+            .join("Microsoft")
+            .join("Teams")
+            .join("Partitions")
+            .join("msa")
+            .join("Cookies")
+    } else if cfg!(target_os = "windows") {
+        let app_data = PathBuf::from(env::var("APPDATA").expect("APPDATA env var not found"));
+        app_data
+            .join("Microsoft")
+            .join("Teams")
+            .join("Partitions")
+            .join("msa")
+            .join("Cookies")
+    } else {
+        panic!("Unsupported platform")
+    }
+}
+
+fn chrome_leveldb_path() -> PathBuf {
     if cfg!(target_os = "macos") {
         let home = PathBuf::from(env::var("HOME").unwrap_or(String::from("~")));
         home.join("Library")
@@ -54,20 +88,14 @@ fn get_teams_db_path() -> PathBuf {
             .join("Default")
             .join("Local Storage")
             .join("leveldb")
-
-        // home.join("Library")
-        //     .join("Application Support")
+    } else if cfg!(target_os = "windows") {
+        let app_data = PathBuf::from(env::var("APPDATA").expect("APPDATA env var not found"));
+        panic!("Haven't implemented chrome leveldb path for windows yet")
+        // app_data
         //     .join("Microsoft")
         //     .join("Teams")
         //     .join("Local Storage")
         //     .join("leveldb")
-    } else if cfg!(target_os = "windows") {
-        let app_data = PathBuf::from(env::var("APPDATA").expect("APPDATA env var not found"));
-        app_data
-            .join("Microsoft")
-            .join("Teams")
-            .join("Local Storage")
-            .join("leveldb")
     } else {
         panic!("Unsupported platform")
     }
