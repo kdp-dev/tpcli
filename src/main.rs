@@ -84,27 +84,27 @@ impl Jwt {
 //     Sqlite,
 // }
 
-fn teams_sqlite_path() -> PathBuf {
-    if cfg!(target_os = "macos") {
+fn teams_sqlite_path(partition: bool) -> PathBuf {
+    let path = if cfg!(target_os = "macos") {
         let home = PathBuf::from(env::var("HOME").unwrap_or(String::from("~")));
         home.join("Library")
             .join("Application Support")
             .join("Microsoft")
             .join("Teams")
-            .join("Partitions")
-            .join("msa")
-            .join("Cookies")
     } else if cfg!(target_os = "windows") {
         let app_data = PathBuf::from(env::var("APPDATA").expect("APPDATA env var not found"));
-        app_data
-            .join("Microsoft")
-            .join("Teams")
-            .join("Partitions")
-            .join("msa")
-            .join("Cookies")
+        app_data.join("Microsoft").join("Teams")
     } else {
         panic!("Unsupported platform")
-    }
+    };
+
+    let path = if partition {
+        path.join("Partitions").join("msa")
+    } else {
+        path
+    };
+
+    path.join("Cookies")
 }
 
 fn chrome_leveldb_path() -> PathBuf {
@@ -220,7 +220,7 @@ fn get_leveldb_tokens() -> (Option<PresenceToken>, Option<SkypeToken>) {
 }
 
 fn get_sqlite_tokens() -> Jwt {
-    let sqlite_path = teams_sqlite_path();
+    let sqlite_path = teams_sqlite_path(true);
     let conn = Connection::open(sqlite_path).unwrap();
     let mut stmt = conn
         .prepare("select value from cookies where name = 'skypetoken_asm'")
@@ -230,6 +230,35 @@ fn get_sqlite_tokens() -> Jwt {
         .unwrap()
         .map(|res| Jwt {
             token: res.unwrap(),
+        })
+        .collect();
+
+    tokens.sort_by_key(|token| Reverse(token.exp()));
+    assert!(tokens.len() >= 1, "No tokens found in MS Teams cookie db");
+
+    tokens.remove(0)
+}
+
+fn decode_urlenc(s: String) -> String {
+    urlencoding::decode(&s).unwrap().into_owned()
+}
+
+fn get_auth_sqlite_tokens() -> Jwt {
+    let sqlite_path = teams_sqlite_path(false);
+    let conn = Connection::open(sqlite_path).unwrap();
+    let mut stmt = conn
+        .prepare("select value from cookies where name = 'authtoken'")
+        .unwrap();
+    let mut tokens: Vec<Jwt> = stmt
+        .query_map([], |row| Ok(row.get_unwrap(0)))
+        .unwrap()
+        .map(|res| {
+            let raw_token_info = res.unwrap();
+            let token_info = decode_urlenc(raw_token_info);
+            let bearer_pair = token_info.split("&").next().unwrap();
+            Jwt {
+                token: bearer_pair.split("=").last().unwrap().to_string(),
+            }
         })
         .collect();
 
@@ -448,12 +477,15 @@ async fn set_both(
     let token: String;
     match instance_type {
         InstanceType::TeamsApp => {
-            let skype_token = get_sqlite_tokens();
             match account_type {
                 AccountType::Microsoft => {
-                    panic!("non-live account Teams app not supported yet");
+                    // let (presence_token, _) = get_leveldb_tokens();
+                    let auth_token = get_auth_sqlite_tokens();
+                    token = auth_token.token;
+                    // panic!("non-live account Teams app not supported yet");
                 }
                 AccountType::Live => {
+                    let skype_token = get_sqlite_tokens();
                     token = skype_token.token;
                 }
             }
@@ -557,7 +589,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         },
     };
 
-    let account_type = AccountType::Live;
+    let account_type = AccountType::Microsoft;
     let instance_type = InstanceType::TeamsApp;
     let presence_to_set = Presence::from_str(matches.value_of("status").unwrap()).unwrap();
 
