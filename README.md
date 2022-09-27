@@ -5,8 +5,9 @@
 </p>
 <hr>
 <p align="center">
-  <img alt="GitHub" src="https://img.shields.io/github/license/KYDronePilot/google-meet-monitor-ext">
+  <img alt="Build binaries job status" src="https://github.com/kdp-dev/tpcli/actions/workflows/ci.yaml/badge.svg">
   <img alt="Language: Rust" src="https://img.shields.io/badge/language-Rust-orange"><br>
+  Quickly manage your Microsoft Teams presence from the CLI
 </p>
 
 ## Features
