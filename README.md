@@ -5,8 +5,9 @@
 </p>
 <hr>
 <p align="center">
-  <img alt="Build binaries job status" src="https://github.com/kdp-dev/tpcli/actions/workflows/ci.yaml/badge.svg">
-  <img alt="Language: Rust" src="https://img.shields.io/badge/language-Rust-orange"><br>
+  <img alt="Language: Rust" src="https://img.shields.io/badge/language-Rust-orange">
+  <img alt="Platforms: macOS, Windows, and Linux" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue">
+  <img alt="Build binaries job status" src="https://github.com/kdp-dev/tpcli/actions/workflows/ci.yaml/badge.svg"><br>
   Quickly manage your Microsoft Teams presence from the command line
 </p>
 
