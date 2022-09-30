@@ -105,3 +105,11 @@ ARGS:
 ## Copyright
 
 Copyright (c) 2022 KDP Software. All Rights Reserved.
+
+## Follow us on social media
+
+<p align="center">
+  <a href="https://twitter.com/KDP_dev">Twitter</a>
+  | <a href="https://www.youtube.com/channel/UCOKUOMU1cSvcgnyga8atl-g">YouTube</a>
+  | <a href="https://www.instagram.com/kdp_software/">Instagram</a>
+</p>
