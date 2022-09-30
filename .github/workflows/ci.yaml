@@ -3,11 +3,11 @@ name: Build binaries
 # on: [push]
 
 on:
-  push:
-    branches:
-      - master
-  # create:
-  #   tags: [v*]
+  # push:
+  #   branches:
+  #     - master
+  create:
+    tags: [v*]
 
 env:
   CARGO_TERM_COLOR: always
