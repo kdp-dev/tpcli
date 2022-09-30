@@ -23,6 +23,45 @@ You must be logged into Teams on your computer, either in Google Chrome or the T
 
 - `tpcli` uses auth tokens stored in Chrome/Electron cookies to authenticate itself.
 
+## Installation
+
+### macOS
+
+M1:
+
+```bash
+sudo curl -sSL 'https://github.com/kdp-dev/tpcli/releases/download/v1.0.0/tpcli-aarch64-apple-darwin.tgz' | sudo tar xzv -C /usr/local/bin
+```
+
+Intel:
+
+```bash
+sudo curl -sSL 'https://github.com/kdp-dev/tpcli/releases/download/v1.0.0/tpcli-x86_64-apple-darwin.tgz' | sudo tar xzv -C /usr/local/bin
+```
+
+### Windows
+
+Run from an Administrator powershell prompt:
+
+```powershell
+Invoke-WebRequest -Uri "https://github.com/kdp-dev/tpcli/releases/download/v1.0.0/tpcli-x86_64-pc-windows-msvc.zip" -OutFile "$env:temp\tpcli.zip"
+Expand-Archive -Path "$env:temp\tpcli.zip" -DestinationPath C:\Windows
+```
+
+### Linux
+
+x86_64:
+
+```bash
+sudo curl -sSL 'https://github.com/kdp-dev/tpcli/releases/download/v1.0.0/tpcli-x86_64-unknown-linux-musl.tgz' | sudo tar xzv -C /usr/local/bin
+```
+
+aarch64:
+
+```bash
+sudo curl -sSL 'https://github.com/kdp-dev/tpcli/releases/download/v1.0.0/tpcli-aarch64-unknown-linux-musl.tgz' | sudo tar xzv -C /usr/local/bin
+```
+
 ## Examples
 
 ```bash
