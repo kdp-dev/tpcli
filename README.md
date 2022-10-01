@@ -9,7 +9,7 @@
   <img alt="Platforms: macOS, Windows, and Linux" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue">
   <img alt="GitHub release downloads" src="https://img.shields.io/github/downloads/kdp-dev/tpcli/v1.0.0/total">
   <img alt="Build binaries job status" src="https://github.com/kdp-dev/tpcli/actions/workflows/ci.yaml/badge.svg">
-  <a href="https://twitter.com/KDP_dev"><img alt="Follow us on Twitter" src="https://img.shields.io/twitter/follow/KDP_dev?style=social"></a><br>
+  <a href="https://twitter.com/kdp_dev"><img alt="Follow us on Twitter" src="https://img.shields.io/twitter/follow/kdp_dev?style=social"></a><br>
   Quickly manage your Microsoft Teams presence from the command line
 </p>
 
