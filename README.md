@@ -106,10 +106,12 @@ ARGS:
 
 Copyright (c) 2022 KDP Software. All Rights Reserved.
 
-## Follow us on social media
+## Connect with [KDP Software](https://kydronepilot.com)
 
 <p align="center">
-  <a href="https://twitter.com/KDP_dev">Twitter</a>
+  <a href="https://kydronepilot.com">kydronepilot.com</a>
+  | <a href="https://twitter.com/kdp_dev">Twitter</a>
+  | <a href="https://www.linkedin.com/company/kdp-software/">LinkedIn</a>
   | <a href="https://www.youtube.com/channel/UCOKUOMU1cSvcgnyga8atl-g">YouTube</a>
   | <a href="https://www.instagram.com/kdp_software/">Instagram</a>
 </p>
