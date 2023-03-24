@@ -104,7 +104,7 @@ ARGS:
 
 ## Copyright
 
-Copyright (c) 2022 KDP Software. All Rights Reserved.
+Copyright (c) 2023 KDP Software Development LLC. All Rights Reserved.
 
 ## Connect with [KDP Software](https://kdp.dev)
 
